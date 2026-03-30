@@ -1,9 +1,7 @@
 repeat task.wait() until game:IsLoaded()
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
-
 local player = Players.LocalPlayer
 
 -- CHARACTER
@@ -16,14 +14,12 @@ end
 setupCharacter()
 player.CharacterAdded:Connect(setupCharacter)
 
--- REMOTES
-local SkillEvent = ReplicatedStorage:WaitForChild("UseSkill")
-local QuestEvent = ReplicatedStorage:WaitForChild("QuestRemote")
+-- TRY FIND REMOTES (auto detect)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SkillEvent = ReplicatedStorage:FindFirstChildWhichIsA("RemoteEvent")
 
 -- STATES
 local autoFarm = false
-local autoSkill = false
-local autoQuest = false
 
 -- REMOVE OLD UI
 pcall(function()
@@ -31,21 +27,18 @@ pcall(function()
 end)
 
 ------------------------------------------------
--- ENEMY
+-- FIND ENEMY (Sailor Piece)
 ------------------------------------------------
 local function getNearestEnemy()
-    local folder = workspace:FindFirstChild("Enemies")
-    if not folder then return nil end
-
     local nearest, dist = nil, math.huge
 
-    for _, mob in pairs(folder:GetChildren()) do
-        if mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") then
-            if mob.Humanoid.Health > 0 then
-                local d = (hrp.Position - mob.HumanoidRootPart.Position).Magnitude
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
+            if v ~= char and v.Humanoid.Health > 0 then
+                local d = (hrp.Position - v.HumanoidRootPart.Position).Magnitude
                 if d < dist then
                     dist = d
-                    nearest = mob
+                    nearest = v
                 end
             end
         end
@@ -55,22 +48,33 @@ local function getNearestEnemy()
 end
 
 ------------------------------------------------
--- AUTO FARM
+-- AUTO FARM (ỔN ĐỊNH)
 ------------------------------------------------
 task.spawn(function()
     while true do
-        task.wait(0.3)
+        task.wait(0.25)
 
         if autoFarm then
             local enemy = getNearestEnemy()
 
-            if enemy then
-                local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
+            if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                local pos = enemy.HumanoidRootPart.Position
+                local dist = (hrp.Position - pos).Magnitude
 
-                if dist > 6 then
-                    humanoid:MoveTo(enemy.HumanoidRootPart.Position)
+                -- TELE GẦN (farm nhanh hơn)
+                if dist > 5 then
+                    hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0))
                 else
-                    SkillEvent:FireServer("M1")
+                    -- đánh thường
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+                    -- thử spam remote (nếu có)
+                    if SkillEvent then
+                        pcall(function()
+                            SkillEvent:FireServer("Z")
+                            SkillEvent:FireServer("X")
+                        end)
+                    end
                 end
             end
         end
@@ -78,146 +82,42 @@ task.spawn(function()
 end)
 
 ------------------------------------------------
--- AUTO SKILL
-------------------------------------------------
-task.spawn(function()
-    while true do
-        task.wait(2)
-
-        if autoSkill then
-            SkillEvent:FireServer("Z")
-            task.wait(0.3)
-            SkillEvent:FireServer("X")
-        end
-    end
-end)
-
-------------------------------------------------
--- AUTO QUEST
-------------------------------------------------
-task.spawn(function()
-    while true do
-        task.wait(5)
-
-        if autoQuest then
-            QuestEvent:FireServer("AcceptQuest", "BanditQuest")
-        end
-    end
-end)
-
-------------------------------------------------
 -- UI
 ------------------------------------------------
-local gui = Instance.new("ScreenGui")
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 gui.Name = "ZMatrixHub"
-gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 320, 0, 230)
-frame.Position = UDim2.new(0.4, 0, 0.3, 0)
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0,280,0,150)
+frame.Position = UDim2.new(0.4,0,0.3,0)
 frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-frame.BorderSizePixel = 0
-frame.Parent = gui
 
--- TITLE
-local title = Instance.new("TextLabel")
+local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1,0,0,40)
 title.BackgroundTransparency = 1
 title.Text = "ZMatrix Hub"
-title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextColor3 = Color3.new(1,1,1)
 title.TextScaled = true
-title.Parent = frame
 
--- SUB TITLE (VI + EN)
-local sub = Instance.new("TextLabel")
-sub.Size = UDim2.new(1,0,0,20)
-sub.Position = UDim2.new(0,0,0,35)
-sub.BackgroundTransparency = 1
-sub.Text = "Auto Farm / Tự động farm"
-sub.TextColor3 = Color3.fromRGB(180,180,180)
-sub.TextScaled = true
-sub.Parent = frame
-
--- DRAG
-local dragging, dragStart, startPos
-
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-    end
-end)
-
-frame.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
-UIS.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-------------------------------------------------
 -- BUTTON
-------------------------------------------------
-local function createButton(textVI, textEN, y, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1,-20,0,40)
-    btn.Position = UDim2.new(0,10,0,y)
-    btn.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.Text = textEN .. " / " .. textVI .. ": OFF"
-    btn.Parent = frame
+local btn = Instance.new("TextButton", frame)
+btn.Size = UDim2.new(1,-20,0,40)
+btn.Position = UDim2.new(0,10,0,60)
+btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+btn.TextColor3 = Color3.new(1,1,1)
+btn.Text = "AUTO FARM: OFF"
 
-    local state = false
-
-    btn.MouseButton1Click:Connect(function()
-        state = not state
-        btn.Text = textEN .. " / " .. textVI .. (state and ": ON" or ": OFF")
-        callback(state)
-    end)
-end
-
-createButton("Tự động farm", "AUTO FARM", 70, function(v) autoFarm = v end)
-createButton("Tự dùng skill", "AUTO SKILL", 120, function(v) autoSkill = v end)
-createButton("Tự nhận nhiệm vụ", "AUTO QUEST", 170, function(v) autoQuest = v end)
+btn.MouseButton1Click:Connect(function()
+    autoFarm = not autoFarm
+    btn.Text = "AUTO FARM: " .. (autoFarm and "ON" or "OFF")
+end)
 
 ------------------------------------------------
 -- TOGGLE UI (INSERT)
 ------------------------------------------------
-local visible = true
-
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
+UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.KeyCode == Enum.KeyCode.Insert then
-        visible = not visible
-        frame.Visible = visible
+        frame.Visible = not frame.Visible
     end
-end)
-
-------------------------------------------------
--- MINI BUTTON
-------------------------------------------------
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0,110,0,30)
-toggleBtn.Position = UDim2.new(0,10,0,10)
-toggleBtn.Text = "Open Hub"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
-toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleBtn.Parent = gui
-
-toggleBtn.MouseButton1Click:Connect(function()
-    frame.Visible = not frame.Visible
 end)
